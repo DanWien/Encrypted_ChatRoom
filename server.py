@@ -44,7 +44,9 @@ def handle(client):
             clients.remove(client)
             client.close()
             nickname = nicknames[index]
-            broadcast(f'b:{nickname} has left the chat.').encode('utf-8')
+            if len(clients):
+                broadcast(f'b:{nickname} has left the chat.').encode('utf-8')
+            print(f"{nickname} has left the chat.")
             nicknames.remove(nickname)
             break
 
@@ -55,7 +57,6 @@ def receive():
 
         client.send("s:setup".encode('utf-8'))
         nickname = client.recv(2048).decode()
-        print(f"Received nickname: {nickname}")
         nicknames.append(nickname)
 
         public_key_pem = client.recv(2048)
@@ -65,7 +66,7 @@ def receive():
         public_key_pem = public_key.save_pkcs1('PEM')
         client.send(public_key_pem)
 
-        print(f'Nickname of the client is {nickname}')
+        print(f'The connection from {address} chose the nickname {nickname}')
 
         time.sleep(2)
         broadcast(f"b:{nickname} has joined the chat.\n".encode('utf-8'))

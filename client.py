@@ -1,7 +1,7 @@
 import pickle
 import socket
 import threading
-import tkinter
+import tkinter as tk
 import tkinter.scrolledtext
 from tkinter import simpledialog
 import rsa
@@ -17,16 +17,42 @@ class Client:
         self.public_key, self.private_key = rsa.newkeys(1024)
         self.server_public_key = None
 
-        msg = tkinter.Tk()
-        msg.withdraw()
-
-        self.nickname = simpledialog.askstring("Nickname", "Please choose a nickname:", parent=msg)
-
         self.gui_done = False
         self.running = True
+        self.start_screen()
 
-        threading.Thread(target=self.receive).start()
-        threading.Thread(target=self.gui_loop).start()
+    def start_screen(self):
+        self.start_win = tk.Tk()
+        self.start_win.title("Encrypted ChatRoom")
+        self.start_win.geometry("520x333")  # Width x Height
+        self.start_win.configure(bg="#282a36")
+
+        # Label
+        lbl = tk.Label(self.start_win, text="Welcome to your encrypted chat.\n Any message sent will be protected from MitM attacks", bg="#282a36", fg="#f8f8f2")
+        lbl.config(font=("Helvetica", 12))
+        lbl.pack(pady=(50, 10))
+
+        lbl = tk.Label(self.start_win, text="Enter your nickname:", bg="#282a36", fg="#f8f8f2")
+        lbl.config(font=("Helvetica", 12))
+        lbl.pack(pady=(50, 10))
+
+        # Nickname Entry
+        self.nickname_entry = tk.Entry(self.start_win, font=("Helvetica", 12), justify="center")
+        self.nickname_entry.pack(ipadx=50, ipady=6)
+
+        # Join Button
+        join_btn = tk.Button(self.start_win, text="Join Chat", command=self.join_chat,
+                             font=("Helvetica", 12), bg="#50fa7b", fg="#282a36", relief="flat")
+        join_btn.pack(pady=(20, 0), ipadx=10, ipady=5)
+
+        self.start_win.mainloop()
+
+    def join_chat(self):
+        self.nickname = self.nickname_entry.get()
+        if self.nickname:
+            self.start_win.destroy()
+            threading.Thread(target=self.receive).start()
+            threading.Thread(target=self.gui_loop).start()
 
     def gui_loop(self):
         self.win = tkinter.Tk()
