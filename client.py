@@ -1,9 +1,7 @@
-import pickle
 import socket
 import threading
 import tkinter as tk
 import tkinter.scrolledtext
-from tkinter import simpledialog
 import rsa
 
 HOST = '127.0.0.1'
@@ -16,6 +14,7 @@ class Client:
         self.sock.connect((host, port))
         self.public_key, self.private_key = rsa.newkeys(1024)
         self.server_public_key = None
+        self.shift_pressed = False
 
         self.gui_done = False
         self.running = True
@@ -24,6 +23,16 @@ class Client:
     def start_screen(self):
         self.start_win = tk.Tk()
         self.start_win.title("Encrypted ChatRoom")
+        window_width = 450
+        window_height = 220
+
+        screen_width = self.start_win.winfo_screenwidth()
+        screen_height = self.start_win.winfo_screenheight()
+
+        x = (screen_width / 2) - (window_width / 2) - 100
+        y = (screen_height / 2) - (window_height / 2) - 100
+
+        self.start_win.geometry('%dx%d+%d+%d' % (window_width, window_height, x, y))
         self.start_win.geometry("520x333")  # Width x Height
         self.start_win.configure(bg="#282a36")
 
@@ -51,42 +60,90 @@ class Client:
         self.nickname = self.nickname_entry.get()
         if self.nickname:
             self.start_win.destroy()
-            threading.Thread(target=self.receive).start()
+
+            recv_thread = threading.Thread(target=self.receive)
+            recv_thread.setDaemon(True)  # Set the thread as daemon
+            recv_thread.start()
+
             threading.Thread(target=self.gui_loop).start()
 
     def gui_loop(self):
-        self.win = tkinter.Tk()
-        self.win.configure(bg="lightgray")
+        self.win = tk.Tk()
+        self.win.title("Encrypted Chat Room")
 
-        self.chat_label = tkinter.Label(self.win, text="Encrypted Chat Room:", bg="lightgray")
-        self.chat_label.config(font=("Arial", 12))
+        # Set window size
+        window_width = 650
+        window_height = 650
+
+        # Get screen dimensions
+        screen_width = self.win.winfo_screenwidth()
+        screen_height = self.win.winfo_screenheight()
+
+        # Calculate x and y coordinates for the Tk window
+        x = (screen_width / 2) - (window_width / 2)
+        y = (screen_height / 2) - (window_height / 2)
+
+        # Set the window size and position
+        self.win.geometry('%dx%d+%d+%d' % (window_width, window_height, x, y))
+        self.win.configure(bg="#282a36")
+
+        # Chat label
+        self.chat_label = tk.Label(self.win, text="Encrypted Chat Room", bg="#282a36", fg="#ffffff")
+        self.chat_label.config(font=("Helvetica", 16))
         self.chat_label.pack(padx=20, pady=5)
 
-        self.text_area = tkinter.scrolledtext.ScrolledText(self.win)
-        self.text_area.pack(padx=20, pady=5)
-        self.text_area.config(state='disabled')
+        # Text area
+        self.text_area = tkinter.scrolledtext.ScrolledText(self.win, bg="#ffffff")
+        self.text_area.pack(padx=20, pady=5, fill=tk.BOTH, expand=True)
+        self.text_area.config(state='disabled', font=("Helvetica", 12))
 
-        self.msg_label = tkinter.Label(self.win, text="Message:", bg="lightgray")
-        self.msg_label.config(font=("Arial", 12))
+        # Message label
+        self.msg_label = tkinter.Label(self.win, text="Type your message:", bg="#282a36", fg="#ffffff")
+        self.msg_label.config(font=("Helvetica", 12))
         self.msg_label.pack(padx=20, pady=5)
 
-        self.input_area = tkinter.Text(self.win, height=3)
-        self.input_area.pack(padx=20, pady=5)
+        # Input area
+        self.input_area = tkinter.Text(self.win, height=3, bg="#f0f0f0")
+        self.input_area.pack(padx=20, pady=5, fill=tk.X)
+        self.input_area.config(font=("Helvetica", 12))
+        self.input_area.bind("<Return>", self.handle_return_key)  # Bind the return key
 
-        self.send_button = tkinter.Button(self.win, text="Send", command=self.write)
-        self.send_button.config(font=("Arial", 12))
-        self.send_button.pack(padx=20, pady=5)
+        # Send button setup...
+        self.send_button = tkinter.Button(self.win, text="Send", command=self.write, bg="#50fa7b", fg="#282a36")
+        self.send_button.config(font=("Helvetica", 12))
+        self.send_button.pack(padx=20, pady=5, side=tk.BOTTOM)
+
+        self.win.bind("<Shift_L>", self.shift_press)
+        self.win.bind("<KeyRelease-Shift_L>", self.shift_release)
 
         self.gui_done = True
-
         self.win.protocol("WM_DELETE_WINDOW", self.terminate)
         self.win.mainloop()
 
+    def handle_return_key(self, event):
+        if self.shift_pressed:
+            # Insert a newline if Shift+Enter is pressed
+            self.input_area.insert(tk.INSERT, "\n")
+            # Move the cursor to the new line
+            self.input_area.see(tk.INSERT)
+            return "break"  # This prevents the default newline insertion behavior
+        else:
+            # Send the message
+            self.write()
+            return "break"  # Prevent the default behavior of inserting a newline
+
+    def shift_press(self, event):
+        self.shift_pressed = True
+
+    def shift_release(self, event):
+        self.shift_pressed = False
+
     def write(self):
         msg = f"{self.nickname}: {self.input_area.get('1.0', 'end')}".encode('utf-8')
-        encrypted_msg = rsa.encrypt(msg, self.server_public_key)
-        self.sock.send(encrypted_msg)
-        self.input_area.delete('1.0', 'end')
+        if msg != "":
+            encrypted_msg = rsa.encrypt(msg, self.server_public_key)
+            self.sock.send(encrypted_msg)
+            self.input_area.delete('1.0', 'end')
 
     def receive(self):
         while self.running:
@@ -116,7 +173,6 @@ class Client:
                     # Handle as encrypted binary data
                     print("Decrypting...")
                     decrypted_msg = rsa.decrypt(raw_msg, self.private_key).decode('utf-8')
-                    print(decrypted_msg)
                     if self.gui_done:
                         self.text_area.config(state='normal')
                         self.text_area.insert('end', decrypted_msg)
@@ -133,9 +189,14 @@ class Client:
                 break
 
     def terminate(self):
+        print("Thank you for using our chat. See you soon!")
         self.running = False
-        self.win.destroy()
-        self.sock.close()
-        exit(0)
+        if self.gui_done:
+            # Schedule the GUI to close on the main thread
+            self.win.after(0, self.win.destroy)
+        else:
+            self.sock.close()
+            exit(0)
 
-client = Client(HOST,PORT)
+if __name__ == "__main__":
+    client = Client(HOST, PORT)
