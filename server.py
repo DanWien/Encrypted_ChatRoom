@@ -15,8 +15,9 @@ server.listen()
 server.settimeout(1.0)
 
 clients = []
-nickname_to_key = {}
+client_threads = []
 nicknames = []
+nickname_to_key = {}
 
 running = True
 
@@ -35,12 +36,12 @@ def broadcast_encrypted(msg):
 
 
 def handle(client):
-    while True:
+    global running
+    while running:
         try:
             msg = client.recv(2048)
-            client_nickname = nicknames[clients.index(client)]
-            print(f"{client_nickname} wants to send an encrypted message.")
-            broadcast_encrypted(msg)
+            if running:
+                broadcast_encrypted(msg)
         except ConnectionResetError as e:
             index = clients.index(client)
             clients.remove(client)
@@ -53,6 +54,7 @@ def handle(client):
             break
         except Exception as e:
             print(f"Unexpected error: {e}")
+            break
 
 def receive():
     global running
@@ -79,7 +81,9 @@ def receive():
             clients.append(client)
             client.send("b:Welcome to your encrypted chat.\nYou are now connected!\n".encode('utf-8'))
 
-            threading.Thread(target=handle, args=(client,)).start()
+            thread = threading.Thread(target=handle, args=(client,))
+            thread.start()
+            client_threads.append(thread)
         except socket.timeout:
             continue
         except Exception as e:
@@ -89,6 +93,7 @@ def receive():
         client.close()
     server.close()
 
+
 if __name__ == "__main__":
     server_thread = threading.Thread(target=receive)
     server_thread.start()
@@ -97,8 +102,10 @@ if __name__ == "__main__":
     while input("") != 'q':
         pass
     print("Beginning Server Shutdown...")
-    time.sleep(1)
-
+    time.sleep(1.5)
+    print("Gracefully shutting down clients...")
+    broadcast("b:shutdown".encode('utf-8'))
     running = False  # Signal server loop to stop
+    time.sleep(3)
     server_thread.join()  # Wait for the server thread to finish
     print("Server shutdown complete.")

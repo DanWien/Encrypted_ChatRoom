@@ -165,10 +165,14 @@ class Client:
                         self.server_public_key = rsa.PublicKey.load_pkcs1(self.sock.recv(2048))
                     elif msg_type == 'b':
                         if self.gui_done:
-                            self.text_area.config(state='normal')
-                            self.text_area.insert('end', msg)
-                            self.text_area.yview('end')
-                            self.text_area.config(state='disabled')
+                            if msg == 'shutdown':
+                                self.handle_server_shutdown()
+                                break
+                            else:
+                                self.text_area.config(state='normal')
+                                self.text_area.insert('end', msg)
+                                self.text_area.yview('end')
+                                self.text_area.config(state='disabled')
                 else:
                     # Handle as encrypted binary data
                     print("Decrypting...")
@@ -179,24 +183,49 @@ class Client:
                         self.text_area.yview('end')
                         self.text_area.config(state='disabled')
             except ConnectionAbortedError:
+                self.handle_connection_aborted()
                 break
             except UnicodeDecodeError:
                 # This except block might be redundant now but kept for safety
                 print("Error during message decoding. Potential binary data received.")
             except Exception as e:
-                print(f"Error: {str(e)}")
-                self.sock.close()
+                self.handle_unexpected_disconnect(e)
                 break
 
-    def terminate(self):
+    def handle_server_shutdown(self):
+        # This function should only be called when the server sends a 'shutdown' message
+        msg = "Server is shutting down. Try reconnecting shortly."
+        self.terminate(msg)
+
+    def handle_connection_aborted(self):
+        # This function should be called when a ConnectionAbortedError exception is caught
+        msg = "The connection was closed by the server. Try reconnecting shortly."
+        self.terminate(msg)
+
+    def handle_unexpected_disconnect(self, e):
+        # This function should be called for unexpected exceptions
+        msg = f"An unexpected error occurred: {e}"
+        if self.running:
+            self.terminate(msg)
+
+    def update_gui(self, message):
+        if self.gui_done:
+            self.text_area.config(state='normal')
+            self.text_area.insert('end', message)
+            self.text_area.yview('end')
+            self.text_area.config(state='disabled')
+        # Handle the Tkinter operations in the main thread
+        self.win.after(0, self.terminate)
+
+    def terminate(self,m):
+        print(m)
         print("Thank you for using our chat. See you soon!")
         self.running = False
         if self.gui_done:
             # Schedule the GUI to close on the main thread
-            self.win.after(0, self.win.destroy)
-        else:
-            self.sock.close()
-            exit(0)
+            self.win.destroy()
+        self.sock.close()
+        exit(0)
 
 if __name__ == "__main__":
     client = Client(HOST, PORT)
