@@ -88,7 +88,6 @@ def receive():
             continue
         except Exception as e:
             print(f"Server error: {e}")
-            break
     for client in clients:
         client.close()
     server.close()
@@ -101,11 +100,12 @@ if __name__ == "__main__":
     print("Server now listening..\nType q to quit.")
     while input("") != 'q':
         pass
+    running = False  # Signal server loop to stop
     print("Beginning Server Shutdown...")
     time.sleep(1.5)
     print("Gracefully shutting down clients...")
-    broadcast("b:shutdown".encode('utf-8'))
-    running = False  # Signal server loop to stop
+    if clients:
+        broadcast("b:shutdown".encode('utf-8'))
     time.sleep(3)
     server_thread.join()  # Wait for the server thread to finish
     print("Server shutdown complete.")

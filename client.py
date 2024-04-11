@@ -15,6 +15,7 @@ class Client:
         self.public_key, self.private_key = rsa.newkeys(1024)
         self.server_public_key = None
         self.shift_pressed = False
+        self.msg_counter = 0
 
         self.gui_done = False
         self.running = True
@@ -88,14 +89,21 @@ class Client:
         self.win.configure(bg="#282a36")
 
         # Chat label
-        self.chat_label = tk.Label(self.win, text="Encrypted Chat Room", bg="#282a36", fg="#ffffff")
+        self.chat_label = tk.Label(self.win, text=f"You are connected as {self.nickname}", bg="#282a36", fg="#ffffff")
         self.chat_label.config(font=("Helvetica", 16))
         self.chat_label.pack(padx=20, pady=5)
 
         # Text area
-        self.text_area = tkinter.scrolledtext.ScrolledText(self.win, bg="#ffffff")
-        self.text_area.pack(padx=20, pady=5, fill=tk.BOTH, expand=True)
-        self.text_area.config(state='disabled', font=("Helvetica", 12))
+        self.canvas = tk.Canvas(self.win, bg="#282a36")
+        self.canvas.pack(padx=20, pady=5, fill=tk.BOTH, expand=True)
+
+        # Scrollbar for Canvas
+        scrollbar = tk.Scrollbar(self.win, orient="vertical", command=self.canvas.yview)
+        scrollbar.pack(side=tk.RIGHT, fill="y")
+        self.canvas.configure(yscrollcommand=scrollbar.set)
+
+        self.frame = tk.Frame(self.canvas, bg="#282a36")
+        self.canvas_frame = self.canvas.create_window((0, 0), window=self.frame, anchor="nw")
 
         # Message label
         self.msg_label = tkinter.Label(self.win, text="Type your message:", bg="#282a36", fg="#ffffff")
@@ -116,9 +124,15 @@ class Client:
         self.win.bind("<Shift_L>", self.shift_press)
         self.win.bind("<KeyRelease-Shift_L>", self.shift_release)
 
+        self.win.bind("<Configure>", self.on_frame_configure)
         self.gui_done = True
         self.win.protocol("WM_DELETE_WINDOW", self.terminate)
         self.win.mainloop()
+
+    def on_frame_configure(self, event=None):
+        '''Reset the scroll region to encompass the inner frame.'''
+        self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+        self.canvas.yview_moveto(1)  # Auto-scroll to the bottom
 
     def handle_return_key(self, event):
         if self.shift_pressed:
@@ -145,6 +159,44 @@ class Client:
             self.sock.send(encrypted_msg)
             self.input_area.delete('1.0', 'end')
 
+    def update_chat_window(self, msg):
+        bg_color = "#d3d3d3"  # Default color for incoming messages
+        if msg.startswith("b:"):
+            msg = msg[2:]  # Strip the broadcast identifier
+            bg_color = "#ADD8E6"  # LightBlue for broadcast messages
+        elif msg.startswith(self.nickname + ":"):
+            # msg = msg[len(self.nickname) + 2:]  # Strip the nickname for outgoing messages - haven't decided if we use it yet
+            bg_color = "#7CFC00"  # Green for outgoing messages
+
+        # Create a frame for the message to control its width
+        message_frame = tk.Frame(self.frame, bg=bg_color)
+        message_frame.pack(pady=5, padx=10, anchor='w')
+
+        label = tk.Label(message_frame, text=msg, bg=bg_color, wraplength=400, justify=tk.LEFT)
+        label.pack(side='left')
+
+        self.msg_counter += 1
+
+        # Update the canvas and the scroll region to include this new message
+        self.canvas.update_idletasks()
+        self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+
+    def handle_server_shutdown(self):
+        # This function should only be called when the server sends a 'shutdown' message
+        print("Server is shutting down. Try reconnecting shortly.")
+        self.terminate()
+
+    def handle_connection_aborted(self):
+        # This function should be called when a ConnectionAbortedError exception is caught
+        print("The connection was terminated. Try reconnecting shortly.")
+        self.terminate()
+
+    def handle_unexpected_disconnect(self, e):
+        # This function should be called for unexpected exceptions
+        print(f"An unexpected error occurred: {e}")
+        if self.running:
+            self.terminate()
+
     def receive(self):
         while self.running:
             try:
@@ -169,21 +221,14 @@ class Client:
                                 self.handle_server_shutdown()
                                 break
                             else:
-                                self.text_area.config(state='normal')
-                                self.text_area.insert('end', msg)
-                                self.text_area.yview('end')
-                                self.text_area.config(state='disabled')
+                                self.update_chat_window(f"b:{msg}")
                 else:
                     # Handle as encrypted binary data
                     print("Decrypting...")
                     decrypted_msg = rsa.decrypt(raw_msg, self.private_key).decode('utf-8')
                     if self.gui_done:
-                        self.text_area.config(state='normal')
-                        self.text_area.insert('end', decrypted_msg)
-                        self.text_area.yview('end')
-                        self.text_area.config(state='disabled')
+                        self.update_chat_window(decrypted_msg)
             except ConnectionAbortedError:
-                self.handle_connection_aborted()
                 break
             except UnicodeDecodeError:
                 # This except block might be redundant now but kept for safety
@@ -192,40 +237,16 @@ class Client:
                 self.handle_unexpected_disconnect(e)
                 break
 
-    def handle_server_shutdown(self):
-        # This function should only be called when the server sends a 'shutdown' message
-        msg = "Server is shutting down. Try reconnecting shortly."
-        self.terminate(msg)
-
-    def handle_connection_aborted(self):
-        # This function should be called when a ConnectionAbortedError exception is caught
-        msg = "The connection was closed by the server. Try reconnecting shortly."
-        self.terminate(msg)
-
-    def handle_unexpected_disconnect(self, e):
-        # This function should be called for unexpected exceptions
-        msg = f"An unexpected error occurred: {e}"
-        if self.running:
-            self.terminate(msg)
-
-    def update_gui(self, message):
-        if self.gui_done:
-            self.text_area.config(state='normal')
-            self.text_area.insert('end', message)
-            self.text_area.yview('end')
-            self.text_area.config(state='disabled')
-        # Handle the Tkinter operations in the main thread
-        self.win.after(0, self.terminate)
-
-    def terminate(self,m):
-        print(m)
+    def terminate(self):
         print("Thank you for using our chat. See you soon!")
         self.running = False
         if self.gui_done:
             # Schedule the GUI to close on the main thread
-            self.win.destroy()
+            self.gui_done = False
+            self.win.after(0, self.win.destroy)
         self.sock.close()
         exit(0)
+
 
 if __name__ == "__main__":
     client = Client(HOST, PORT)
