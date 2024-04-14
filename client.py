@@ -24,6 +24,7 @@ class Client:
         self.running = True
         self.start_screen()
 
+    # This code takes care of displaying the starting screen that the client sees when he connects.
     def start_screen(self):
         self.start_win = tk.Tk()
         self.start_win.title("Encrypted ChatRoom")
@@ -60,17 +61,19 @@ class Client:
 
         self.start_win.mainloop()
 
+    # After entering the nickname, start the appropriate threads to communicate and display the chat.
     def join_chat(self):
         self.nickname = self.nickname_entry.get()
         if self.nickname:
             self.start_win.destroy()
 
             recv_thread = threading.Thread(target=self.receive)
-            recv_thread.setDaemon(True)  # Set the thread as daemon
+            recv_thread.setDaemon(True)
             recv_thread.start()
 
             threading.Thread(target=self.gui_loop).start()
 
+    # This loop is responsible for managing the GUI of the chat
     def gui_loop(self):
         self.win = tk.Tk()
         self.win.title("Encrypted Chat Room")
@@ -132,11 +135,13 @@ class Client:
         self.win.protocol("WM_DELETE_WINDOW", self.terminate)
         self.win.mainloop()
 
+    # This makes the window look more consistent
     def on_frame_configure(self, event=None):
         '''Reset the scroll region to encompass the inner frame.'''
         self.canvas.configure(scrollregion=self.canvas.bbox("all"))
         self.canvas.yview_moveto(1)  # Auto-scroll to the bottom
 
+    # Separate handling of the "Enter" key-press event
     def handle_return_key(self, event):
         if self.shift_pressed:
             # Insert a newline if Shift+Enter is pressed
@@ -147,22 +152,22 @@ class Client:
         else:
             # Send the message
             self.write()
-            return "break"  # Prevent the default behavior of inserting a newline
+            return "break"
 
+    # These methods handle the "Shift" key-press event
     def shift_press(self, event):
         self.shift_pressed = True
 
     def shift_release(self, event):
         self.shift_pressed = False
 
-
+    # Displaying the messages on the GUI
     def update_chat_window(self, msg):
         bg_color = "#d3d3d3"  # Default color for incoming messages
         if msg.startswith("b:"):
             msg = msg[2:]  # Strip the broadcast identifier
             bg_color = "#ADD8E6"  # LightBlue for broadcast messages
         elif msg.startswith(self.nickname + ":"):
-            # msg = msg[len(self.nickname) + 2:]  # Strip the nickname for outgoing messages - haven't decided if we use it yet
             bg_color = "#7CFC00"  # Green for outgoing messages
 
         # Create a frame for the message to control its width
@@ -194,6 +199,7 @@ class Client:
         if self.running:
             self.terminate()
 
+    # Handles outputting messages and sending them to the server
     def write(self):
         user_input = self.input_area.get('1.0', 'end')
         msg = f"{self.nickname}: {user_input}".encode('utf-8') if user_input != "\n" else ""
@@ -207,6 +213,7 @@ class Client:
             self.sock.send(encrypted_msg)
             self.input_area.delete('1.0', 'end')
 
+    # Handles incoming messages from the server or other clients.
     def receive(self):
         while self.running:
             try:
@@ -215,7 +222,6 @@ class Client:
                 try:
                     prefix = raw_msg[:2].decode('utf-8')
                 except UnicodeDecodeError:
-                    # If decoding fails, it's likely binary data (encrypted message)
                     prefix = ''
 
                 if prefix == 's:' or prefix == 'b:':
@@ -247,6 +253,7 @@ class Client:
                 self.handle_unexpected_disconnect(e)
                 break
 
+    # Handle client termination
     def terminate(self):
         print("Thank you for using our chat. See you soon!")
         self.running = False

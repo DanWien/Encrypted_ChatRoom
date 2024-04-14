@@ -22,12 +22,13 @@ nickname_to_key = {}
 
 running = True
 
-
+# Broadcast messages that are tagged as 'notifications'
 def broadcast(msg):
     for client in clients:
         client.send(msg)
 
 
+# Decrypt and Re-Encrypt the messages to be carried out to the appropriate client
 def broadcast_encrypted(msg):
     decrypted_msg = rsa.decrypt(msg, private_key).decode('utf-8')
     for client in clients:
@@ -36,6 +37,7 @@ def broadcast_encrypted(msg):
         client.send(encrypted_msg)
 
 
+# Each client thread performs this code.
 def handle(client):
     global running
     while running:
@@ -57,6 +59,7 @@ def handle(client):
             print(f"Unexpected error: {e}")
             break
 
+# Taking in new clients
 def receive():
     global running
     while running:
@@ -98,15 +101,16 @@ if __name__ == "__main__":
     server_thread = threading.Thread(target=receive)
     server_thread.start()
 
+    # Graceful Shutdown
     print("Server now listening..\nType q to quit.")
     while input("") != 'q':
         pass
     running = False  # Signal server loop to stop
+    if clients:
+        broadcast("b:shutdown".encode('utf-8'))
     print("Beginning Server Shutdown...")
     time.sleep(1.5)
     print("Gracefully shutting down clients...")
-    if clients:
-        broadcast("b:shutdown".encode('utf-8'))
     time.sleep(3)
     server_thread.join()  # Wait for the server thread to finish
     print("Server shutdown complete.")
