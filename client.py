@@ -28,6 +28,7 @@ class Client:
     def start_screen(self):
         self.start_win = tk.Tk()
         self.start_win.title("Encrypted ChatRoom")
+        self.start_win.attributes('-topmost', True)
         window_width = 450
         window_height = 220
 
@@ -266,4 +267,8 @@ class Client:
 
 
 if __name__ == "__main__":
+    choice = input("Would you like to (1) Choose your own host and port or (2) Use the default values?\n")
+    if choice == '1':
+        HOST = input("Choose your desired IP address: ")
+        PORT = int(input("Choose your desired port number: "))
     client = Client(HOST, PORT)

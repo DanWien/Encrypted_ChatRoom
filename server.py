@@ -3,10 +3,15 @@ import socket
 import time
 import rsa
 
-# host = input("Choose your desired IP address: ")
-# port = int(input("Choose your desired port number: "))
-host = '127.0.0.1'
-port = 9999
+choice = input("Would you like to (1) Choose your own host and port or (2) Use the default values?\n")
+host = ''
+port = 0
+if choice == '1':
+    host = input("Choose your desired IP address: ")
+    port = int(input("Choose your desired port number: "))
+else:
+    host = '127.0.0.1'
+    port = 9999
 
 public_key, private_key = rsa.newkeys(1024)
 
@@ -43,8 +48,11 @@ def handle(client):
     while running:
         try:
             msg = client.recv(2048)
-            if running:
-                broadcast_encrypted(msg)
+            if msg:
+                if running:
+                    broadcast_encrypted(msg)
+                else:
+                    raise ConnectionResetError
         except ConnectionResetError as e:
             index = clients.index(client)
             clients.remove(client)
