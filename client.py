@@ -4,8 +4,11 @@ import tkinter as tk
 import tkinter.scrolledtext
 import rsa
 
+# HOST = input("Choose your desired IP address: ")
+# PORT = int(input("Choose your desired port number: "))
 HOST = '127.0.0.1'
 PORT = 9999
+MAX_BYTES_SIZE = 117
 
 
 class Client:
@@ -152,12 +155,6 @@ class Client:
     def shift_release(self, event):
         self.shift_pressed = False
 
-    def write(self):
-        msg = f"{self.nickname}: {self.input_area.get('1.0', 'end')}".encode('utf-8')
-        if msg != "":
-            encrypted_msg = rsa.encrypt(msg, self.server_public_key)
-            self.sock.send(encrypted_msg)
-            self.input_area.delete('1.0', 'end')
 
     def update_chat_window(self, msg):
         bg_color = "#d3d3d3"  # Default color for incoming messages
@@ -196,6 +193,19 @@ class Client:
         print(f"An unexpected error occurred: {e}")
         if self.running:
             self.terminate()
+
+    def write(self):
+        user_input = self.input_area.get('1.0', 'end')
+        msg = f"{self.nickname}: {user_input}".encode('utf-8') if user_input != "\n" else ""
+        if len(msg) > MAX_BYTES_SIZE:
+            msg = f"b:Your message length is {len(msg)}, the max length is 117 due to RSA encryption limits.\nConsider splitting the message, or type a new one."
+            self.update_chat_window(msg)
+            self.input_area.delete('1.0', 'end')
+            return
+        if msg != "":
+            encrypted_msg = rsa.encrypt(msg, self.server_public_key)
+            self.sock.send(encrypted_msg)
+            self.input_area.delete('1.0', 'end')
 
     def receive(self):
         while self.running:

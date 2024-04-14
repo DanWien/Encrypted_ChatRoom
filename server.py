@@ -3,7 +3,8 @@ import socket
 import time
 import rsa
 
-
+# host = input("Choose your desired IP address: ")
+# port = int(input("Choose your desired port number: "))
 host = '127.0.0.1'
 port = 9999
 
